@@ -1,4 +1,4 @@
-from _future_ import annotations
+from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
@@ -31,7 +31,7 @@ st.set_page_config(
 )
 
 # ตำแหน่งไฟล์รูปภาพ อยู่โฟลเดอร์เดียวกับ app.py
-SIDEBAR_IMAGE = Path(_file_).parent / "library.png"
+SIDEBAR_IMAGE = Path(__file__).parent / "library.png"
 
 # ==================================================
 # ตกแต่ง CSS
@@ -90,7 +90,7 @@ st.markdown(
         font-size: .9rem;
       }
 
-      /* จัดรูปภาพในแถบด้านซ้าย */
+      /* จัดรูปภาพในแถบด้านซ้ายให้มุมโค้ง */
       [data-testid="stSidebar"] img {
         border-radius: 14px;
       }
@@ -107,9 +107,7 @@ st.markdown(
 def require_connection() -> None:
     try:
         if not ping():
-            raise RuntimeError(
-                "Neo4j did not return a healthy response"
-            )
+            raise RuntimeError("Neo4j did not return a healthy response")
 
     except Exception as exc:
         st.error("ยังเชื่อมต่อ Neo4j Aura ไม่สำเร็จ")
@@ -147,17 +145,13 @@ def student_selector(key: str = "student") -> str:
         )
         st.stop()
 
+    # สร้างรายการให้เลือก เช่น "S001 — สมชาย"
     labels = {
-        f"{x['student_id']} — {x['name']}":
-        x["student_id"]
+        f"{x['student_id']} — {x['name']}": x["student_id"]
         for x in students
     }
 
-    chosen = st.selectbox(
-        "เลือกผู้ใช้",
-        list(labels),
-        key=key,
-    )
+    chosen = st.selectbox("เลือกผู้ใช้", list(labels), key=key)
 
     return labels[chosen]
 
@@ -170,41 +164,26 @@ def explain_reason(row: dict) -> str:
     parts = []
 
     if row.get("friend_count", 0):
-        friends = ", ".join(
-            row.get("friend_names") or []
-        )
-
+        friends = ", ".join(row.get("friend_names") or [])
         parts.append(
             f"เพื่อน {row['friend_count']} คนเคยยืม"
             + (f" ({friends})" if friends else "")
         )
 
     if row.get("interest_matches", 0):
-        cats = ", ".join(
-            row.get("matched_categories") or []
-        )
-
+        cats = ", ".join(row.get("matched_categories") or [])
         parts.append(
-            f"ตรงกับความสนใจ "
-            f"{row['interest_matches']} หมวด"
+            f"ตรงกับความสนใจ {row['interest_matches']} หมวด"
             + (f" ({cats})" if cats else "")
         )
 
     if row.get("popularity", 0):
-        parts.append(
-            f"ถูกยืมแล้ว {row['popularity']} ครั้ง"
-        )
+        parts.append(f"ถูกยืมแล้ว {row['popularity']} ครั้ง")
 
     if row.get("avg_rating", 0):
-        parts.append(
-            f"คะแนนเฉลี่ย "
-            f"{row['avg_rating']:.2f}/5"
-        )
+        parts.append(f"คะแนนเฉลี่ย {row['avg_rating']:.2f}/5")
 
-    return (
-        " • ".join(parts)
-        or "แนะนำจากข้อมูลพฤติกรรมโดยรวม"
-    )
+    return " • ".join(parts) or "แนะนำจากข้อมูลพฤติกรรมโดยรวม"
 
 
 # ==================================================
@@ -246,17 +225,11 @@ with st.sidebar:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # ถ้ามีไฟล์ library.png ให้แสดงรูป ถ้าไม่มีให้แสดงข้อความเตือน
     if SIDEBAR_IMAGE.is_file():
-        st.image(
-            str(SIDEBAR_IMAGE),
-            caption="rub",
-            width=120,
-        )
+        st.image(str(SIDEBAR_IMAGE), caption="rub", width=120)
     else:
-        st.info(
-            "กรุณาวางไฟล์ library.png "
-            "ไว้ในโฟลเดอร์เดียวกับ app.py"
-        )
+        st.info("กรุณาวางไฟล์ library.png ไว้ในโฟลเดอร์เดียวกับ app.py")
 
 
 # ==================================================
@@ -267,10 +240,7 @@ st.markdown(
     """
     <div class="hero">
       <h1>📚 GraphBook Recommendation System</h1>
-      <p>
-        ระบบแนะนำหนังสือด้วย Graph Database
-        ที่อธิบายเหตุผลของคำแนะนำได้
-      </p>
+      <p>ระบบแนะนำหนังสือด้วย Graph Database ที่อธิบายเหตุผลของคำแนะนำได้</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -288,26 +258,10 @@ if page == "Dashboard":
     m = get_dashboard_metrics()
 
     c1, c2, c3, c4 = st.columns(4)
-
-    c1.metric(
-        "Students",
-        m.get("students", 0),
-    )
-
-    c2.metric(
-        "Books",
-        m.get("books", 0),
-    )
-
-    c3.metric(
-        "Borrowed relationships",
-        m.get("borrows", 0),
-    )
-
-    c4.metric(
-        "Friend relationships",
-        m.get("friendships", 0),
-    )
+    c1.metric("Students", m.get("students", 0))
+    c2.metric("Books", m.get("books", 0))
+    c3.metric("Borrowed relationships", m.get("borrows", 0))
+    c4.metric("Friend relationships", m.get("friendships", 0))
 
     st.divider()
 
@@ -319,43 +273,24 @@ if page == "Dashboard":
         left, right = st.columns([1, 2])
 
         with left:
-
-            st.markdown(
-                f"### {profile['name']}"
-            )
-
+            st.markdown(f"### {profile['name']}")
+            st.write(f"**รหัส:** {profile['student_id']}")
+            st.write(f"**สาขา:** {profile['major']}")
+            st.write(f"**ชั้นปี:** {profile['year']}")
             st.write(
-                f"*รหัส:* {profile['student_id']}"
-            )
-
-            st.write(
-                f"*สาขา:* {profile['major']}"
-            )
-
-            st.write(
-                f"*ชั้นปี:* {profile['year']}"
-            )
-
-            st.write(
-                "*ความสนใจ:* "
-                + (
-                    ", ".join(profile["interests"])
-                    or "ยังไม่มี"
-                )
+                "**ความสนใจ:** "
+                + (", ".join(profile["interests"]) or "ยังไม่มี")
             )
 
         with right:
-
             st.markdown("### ประวัติการยืม")
 
             if profile["borrowed"]:
-
                 st.dataframe(
                     pd.DataFrame(profile["borrowed"]),
                     use_container_width=True,
                     hide_index=True,
                 )
-
             else:
                 st.info("ยังไม่มีประวัติการยืม")
 
@@ -370,12 +305,7 @@ elif page == "Recommendations":
 
     student_id = student_selector("rec_student")
 
-    top_n = st.slider(
-        "จำนวนคำแนะนำ",
-        3,
-        12,
-        6,
-    )
+    top_n = st.slider("จำนวนคำแนะนำ", 3, 12, 6)
 
     rows = recommend_books(student_id, top_n)
 
@@ -391,37 +321,17 @@ elif page == "Recommendations":
 
     for i, row in enumerate(rows, start=1):
 
-        authors = (
-            ", ".join(row.get("authors") or [])
-            or "ไม่ระบุผู้แต่ง"
-        )
+        authors = ", ".join(row.get("authors") or []) or "ไม่ระบุผู้แต่ง"
+        categories = ", ".join(row.get("categories") or []) or "ไม่ระบุหมวด"
 
-        categories = (
-            ", ".join(row.get("categories") or [])
-            or "ไม่ระบุหมวด"
-        )
-
+        # การ์ดแสดงหนังสือที่แนะนำ 1 เล่ม
         st.markdown(
             f"""
             <div class="book-card">
-              <span class="score-pill">
-                #{i} · score {row['score']:.2f}
-              </span>
-
-              <h3 style="margin:.55rem 0 .2rem 0">
-                {row['title']}
-              </h3>
-
-              <div class="muted">
-                {row['book_id']} ·
-                {authors} ·
-                {categories}
-              </div>
-
-              <p>
-                <b>เหตุผล:</b>
-                {explain_reason(row)}
-              </p>
+              <span class="score-pill">#{i} · score {row['score']:.2f}</span>
+              <h3 style="margin:.55rem 0 .2rem 0">{row['title']}</h3>
+              <div class="muted">{row['book_id']} · {authors} · {categories}</div>
+              <p><b>เหตุผล:</b> {explain_reason(row)}</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -448,8 +358,7 @@ elif page == "Book Search":
     category = c2.selectbox(
         "หมวด",
         categories,
-        format_func=lambda x:
-            "ทุกหมวด" if x == "" else x,
+        format_func=lambda x: "ทุกหมวด" if x == "" else x,
     )
 
     rows = search_books(keyword, category)
@@ -479,25 +388,13 @@ elif page == "Borrow / Rate":
         st.info("ยังไม่มีหนังสือ")
         st.stop()
 
-    book_labels = {
-        f"{b['book_id']} — {b['title']}":
-        b["book_id"]
-        for b in books
-    }
+    book_labels = {f"{b['book_id']} — {b['title']}": b["book_id"] for b in books}
 
-    selected = st.selectbox(
-        "หนังสือ",
-        list(book_labels),
-    )
+    selected = st.selectbox("หนังสือ", list(book_labels))
 
-    borrow_date = st.date_input(
-        "วันที่ยืม",
-        value=date.today(),
-    )
+    borrow_date = st.date_input("วันที่ยืม", value=date.today())
 
-    use_rating = st.checkbox(
-        "ให้คะแนนพร้อมกัน"
-    )
+    use_rating = st.checkbox("ให้คะแนนพร้อมกัน")
 
     rating = st.slider(
         "คะแนน",
@@ -508,12 +405,9 @@ elif page == "Borrow / Rate":
         disabled=not use_rating,
     )
 
-    if st.button(
-        "บันทึก",
-        type="primary",
-        use_container_width=True,
-    ):
+    if st.button("บันทึก", type="primary", use_container_width=True):
 
+        # บันทึกความสัมพันธ์ BORROWED ลง Neo4j
         record_borrow(
             student_id,
             book_labels[selected],
@@ -521,9 +415,7 @@ elif page == "Borrow / Rate":
             rating if use_rating else None,
         )
 
-        st.success(
-            "บันทึกความสัมพันธ์ BORROWED แล้ว"
-        )
+        st.success("บันทึกความสัมพันธ์ BORROWED แล้ว")
 
 
 # ==================================================
@@ -539,19 +431,14 @@ elif page == "Graph Explorer":
     rows = graph_neighborhood(student_id)
 
     if not rows:
-
         st.info("ยังไม่มี neighborhood graph")
 
     else:
-
+        # สร้างกราฟด้วยภาษา DOT ของ Graphviz
         dot = [
             "digraph G {",
             'rankdir="LR";',
-            (
-                'node [shape=box, '
-                'style="rounded,filled", '
-                'fillcolor="#f8fafc"];'
-            ),
+            'node [shape=box, style="rounded,filled", fillcolor="#f8fafc"];',
         ]
 
         seen_nodes = set()
@@ -559,48 +446,26 @@ elif page == "Graph Explorer":
         for r in rows:
 
             for nid, label, name in [
-                (
-                    r["source_id"],
-                    r["source_label"],
-                    r["source_name"],
-                ),
-                (
-                    r["target_id"],
-                    r["target_label"],
-                    r["target_name"],
-                ),
+                (r["source_id"], r["source_label"], r["source_name"]),
+                (r["target_id"], r["target_label"], r["target_name"]),
             ]:
-
+                # เพิ่มโหนดแค่ครั้งเดียว ไม่ให้ซ้ำ
                 if nid not in seen_nodes:
-
-                    safe_name = str(name).replace(
-                        '"', "'"
-                    )
-
-                    dot.append(
-                        f'"{nid}" '
-                        f'[label="{safe_name}\\n:{label}"];'
-                    )
-
+                    safe_name = str(name).replace('"', "'")
+                    dot.append(f'"{nid}" [label="{safe_name}\\n:{label}"];')
                     seen_nodes.add(nid)
 
+            # เพิ่มเส้นเชื่อมระหว่างโหนด
             dot.append(
-                f'"{r["source_id"]}" -> '
-                f'"{r["target_id"]}" '
+                f'"{r["source_id"]}" -> "{r["target_id"]}" '
                 f'[label="{r["relationship"]}"];'
             )
 
         dot.append("}")
 
-        st.graphviz_chart(
-            "\n".join(dot),
-            use_container_width=True,
-        )
+        st.graphviz_chart("\n".join(dot), use_container_width=True)
 
-        with st.expander(
-            "ดูข้อมูล edge ที่ใช้วาดกราฟ"
-        ):
-
+        with st.expander("ดูข้อมูล edge ที่ใช้วาดกราฟ"):
             st.dataframe(
                 pd.DataFrame(rows),
                 use_container_width=True,
@@ -616,35 +481,24 @@ elif page == "Admin / Setup":
 
     st.subheader("⚙️ Setup ข้อมูลตัวอย่าง")
 
-    st.warning(
-        "ปุ่มนี้ไม่ลบข้อมูลเดิม "
-        "และใช้ MERGE จึงสามารถกดซ้ำได้"
-    )
+    st.warning("ปุ่มนี้ไม่ลบข้อมูลเดิม และใช้ MERGE จึงสามารถกดซ้ำได้")
 
     st.markdown(
         """
-        *Graph schema*
+        **Graph schema**
 
-        - (:Student)-[:FRIEND_OF]-(:Student)
-        - (:Student)-[:BORROWED {borrow_date, rating}]->(:Book)
-        - (:Student)-[:INTERESTED_IN]->(:Category)
-        - (:Book)-[:IN_CATEGORY]->(:Category)
-        - (:Author)-[:WROTE]->(:Book)
+        - `(:Student)-[:FRIEND_OF]-(:Student)`
+        - `(:Student)-[:BORROWED {borrow_date, rating}]->(:Book)`
+        - `(:Student)-[:INTERESTED_IN]->(:Category)`
+        - `(:Book)-[:IN_CATEGORY]->(:Category)`
+        - `(:Author)-[:WROTE]->(:Book)`
         """
     )
 
-    if st.button(
-        "สร้าง Constraint + Demo Data",
-        type="primary",
-        use_container_width=True,
-    ):
+    if st.button("สร้าง Constraint + Demo Data", type="primary", use_container_width=True):
 
         with st.spinner("กำลังสร้างข้อมูล..."):
-
             seed_demo_data()
 
-        st.success(
-            "สร้างข้อมูลตัวอย่างเรียบร้อยแล้ว"
-        )
-
+        st.success("สร้างข้อมูลตัวอย่างเรียบร้อยแล้ว")
         st.rerun()
