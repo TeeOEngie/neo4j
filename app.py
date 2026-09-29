@@ -91,6 +91,19 @@ def explain_reason(row: dict) -> str:
         parts.append(f"คะแนนเฉลี่ย {row['avg_rating']:.2f}/5")
     return " • ".join(parts) or "แนะนำจากข้อมูลพฤติกรรมโดยรวม"
 
+import base64
+from pathlib import Path
+
+IMAGE_DIR = Path(__file__).parent / "images"  # โฟลเดอร์รูปใน GitHub ตั้งชื่อไฟล์ตาม book_id เช่น B001.jpg
+
+@st.cache_data(show_spinner=False)
+def cover_src(book_id: str) -> str:
+    """หารูปปกตาม book_id แล้วแปลงเป็น base64 ถ้าไม่เจอใช้รูป No Cover"""
+    for ext, mime in {".jpg": "jpeg", ".jpeg": "jpeg", ".png": "png", ".webp": "webp"}.items():
+        path = IMAGE_DIR / f"{book_id}{ext}"
+        if path.exists():
+            return f"data:image/{mime};base64," + base64.b64encode(path.read_bytes()).decode()
+    return "https://placehold.co/200x300?text=No+Cover"
 
 require_connection()
 
@@ -157,6 +170,7 @@ elif page == "Recommendations":
         st.markdown(
             f"""
             <div class="book-card">
+              <img src="{cover_src(row['book_id'])}" style="width:90px;height:130px;object-fit:cover;border-radius:10px;float:left;margin-right:1rem;">  <!-- รูปปก -->
               <span class="score-pill">#{i} · score {row['score']:.2f}</span>
               <h3 style="margin:.55rem 0 .2rem 0">{row['title']}</h3>
               <div class="muted">{row['book_id']} · {authors} · {categories}</div>
@@ -174,7 +188,18 @@ elif page == "Book Search":
     category = c2.selectbox("หมวด", categories, format_func=lambda x: "ทุกหมวด" if x == "" else x)
     rows = search_books(keyword, category)
     st.write(f"พบ {len(rows)} รายการ")
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    df = pd.DataFrame(rows)                      # แปลงผลค้นหาเป็นตาราง
+    if rows:
+        # เพิ่มคอลัมน์ "cover" ไว้หน้าสุด โดยหารูปของแต่ละเล่มจาก book_id
+        df.insert(0, "cover", [cover_src(r["book_id"]) for r in rows])
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={"cover": st.column_config.ImageColumn("ปก")},  # บอกให้แสดงคอลัมน์ cover เป็นรูป
+    )
+    
 
 elif page == "Borrow / Rate":
     st.subheader("📝 บันทึกการยืมและให้คะแนน")
