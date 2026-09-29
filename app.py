@@ -249,7 +249,7 @@ with st.sidebar:
     if SIDEBAR_IMAGE.is_file():
         st.image(
             str(SIDEBAR_IMAGE),
-            caption="GraphBook Library",
+            caption="rub",
             width=120,
         )
     else:
