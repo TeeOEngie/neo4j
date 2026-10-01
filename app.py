@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -9,13 +8,12 @@ import streamlit as st
 from neo4j_service import (
     get_dashboard_metrics,
     get_profile,
-    get_students,
+    get_users,
     graph_neighborhood,
-    list_categories,
     ping,
-    recommend_books,
-    record_borrow,
-    search_books,
+    recommend_monitors,
+    record_like,
+    search_monitors,
     seed_demo_data,
 )
 
@@ -24,14 +22,14 @@ from neo4j_service import (
 # ==================================================
 
 st.set_page_config(
-    page_title="GraphBook Recommender",
-    page_icon="📚",
+    page_title="MonitorGraph Recommender",
+    page_icon="🖥️",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # ตำแหน่งไฟล์รูปภาพ อยู่โฟลเดอร์เดียวกับ app.py
-SIDEBAR_IMAGE = Path(__file__).parent / "library.png"
+SIDEBAR_IMAGE = Path(__file__).parent / "monitor.png"
 
 # ==================================================
 # ตกแต่ง CSS
@@ -68,7 +66,7 @@ st.markdown(
         margin: .35rem 0 0 0;
       }
 
-      .book-card {
+      .monitor-card {
         padding: 1rem 1.1rem;
         border: 1px solid rgba(128,128,128,.25);
         border-radius: 16px;
@@ -131,24 +129,24 @@ def require_connection() -> None:
 
 
 # ==================================================
-# เลือกนักศึกษา
+# เลือกผู้ใช้
 # ==================================================
 
-def student_selector(key: str = "student") -> str:
-    students = get_students()
+def user_selector(key: str = "user") -> str:
+    users = get_users()
 
-    if not students:
+    if not users:
         st.info(
-            "ยังไม่มีข้อมูลนักศึกษา "
+            "ยังไม่มีข้อมูลผู้ใช้ "
             "กรุณาไปหน้า Admin / Setup "
             "แล้วสร้างข้อมูลตัวอย่าง"
         )
         st.stop()
 
-    # สร้างรายการให้เลือก เช่น "S001 — สมชาย"
+    # สร้างรายการให้เลือก เช่น "U001 — Tony"
     labels = {
-        f"{x['student_id']} — {x['name']}": x["student_id"]
-        for x in students
+        f"{x['user_id']} — {x['name']}": x["user_id"]
+        for x in users
     }
 
     chosen = st.selectbox("เลือกผู้ใช้", list(labels), key=key)
@@ -166,22 +164,12 @@ def explain_reason(row: dict) -> str:
     if row.get("friend_count", 0):
         friends = ", ".join(row.get("friend_names") or [])
         parts.append(
-            f"เพื่อน {row['friend_count']} คนเคยยืม"
+            f"เพื่อน {row['friend_count']} คนชอบจอนี้"
             + (f" ({friends})" if friends else "")
         )
 
-    if row.get("interest_matches", 0):
-        cats = ", ".join(row.get("matched_categories") or [])
-        parts.append(
-            f"ตรงกับความสนใจ {row['interest_matches']} หมวด"
-            + (f" ({cats})" if cats else "")
-        )
-
     if row.get("popularity", 0):
-        parts.append(f"ถูกยืมแล้ว {row['popularity']} ครั้ง")
-
-    if row.get("avg_rating", 0):
-        parts.append(f"คะแนนเฉลี่ย {row['avg_rating']:.2f}/5")
+        parts.append(f"มีคนชอบทั้งหมด {row['popularity']} คน")
 
     return " • ".join(parts) or "แนะนำจากข้อมูลพฤติกรรมโดยรวม"
 
@@ -199,7 +187,7 @@ require_connection()
 
 with st.sidebar:
 
-    st.markdown("## 📚 GraphBook")
+    st.markdown("## 🖥️ MonitorGraph")
     st.caption("Neo4j Aura + Streamlit")
 
     # เมนูหลักของระบบ
@@ -208,8 +196,8 @@ with st.sidebar:
         [
             "Dashboard",
             "Recommendations",
-            "Book Search",
-            "Borrow / Rate",
+            "Monitor Search",
+            "Like Monitor",
             "Graph Explorer",
             "Admin / Setup",
         ],
@@ -219,17 +207,13 @@ with st.sidebar:
 
     st.caption("Bachelor-level Graph Database Project")
 
-    # ==================================================
-    # รูปภาพด้านซ้าย
-    # ==================================================
-
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ถ้ามีไฟล์ library.png ให้แสดงรูป ถ้าไม่มีให้แสดงข้อความเตือน
+    # ถ้ามีไฟล์ monitor.png ให้แสดงรูป ถ้าไม่มีให้แสดงข้อความเตือน
     if SIDEBAR_IMAGE.is_file():
         st.image(str(SIDEBAR_IMAGE), caption="rub", width=120)
     else:
-        st.info("กรุณาวางไฟล์ library.png ไว้ในโฟลเดอร์เดียวกับ app.py")
+        st.info("กรุณาวางไฟล์ monitor.png ไว้ในโฟลเดอร์เดียวกับ app.py")
 
 
 # ==================================================
@@ -239,8 +223,8 @@ with st.sidebar:
 st.markdown(
     """
     <div class="hero">
-      <h1>📚 GraphBook Recommendation System</h1>
-      <p>ระบบแนะนำหนังสือด้วย Graph Database ที่อธิบายเหตุผลของคำแนะนำได้</p>
+      <h1>🖥️ MonitorGraph Recommendation System</h1>
+      <p>ระบบแนะนำจอคอมพิวเตอร์ด้วย Graph Database ที่อธิบายเหตุผลของคำแนะนำได้</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -258,15 +242,15 @@ if page == "Dashboard":
     m = get_dashboard_metrics()
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Students", m.get("students", 0))
-    c2.metric("Books", m.get("books", 0))
-    c3.metric("Borrowed relationships", m.get("borrows", 0))
+    c1.metric("Users", m.get("users", 0))
+    c2.metric("Monitors", m.get("monitors", 0))
+    c3.metric("Like relationships", m.get("likes", 0))
     c4.metric("Friend relationships", m.get("friendships", 0))
 
     st.divider()
 
-    student_id = student_selector("dash_student")
-    profile = get_profile(student_id)
+    user_id = user_selector("dash_user")
+    profile = get_profile(user_id)
 
     if profile:
 
@@ -274,25 +258,23 @@ if page == "Dashboard":
 
         with left:
             st.markdown(f"### {profile['name']}")
-            st.write(f"**รหัส:** {profile['student_id']}")
-            st.write(f"**สาขา:** {profile['major']}")
-            st.write(f"**ชั้นปี:** {profile['year']}")
+            st.write(f"**รหัส:** {profile['user_id']}")
             st.write(
-                "**ความสนใจ:** "
-                + (", ".join(profile["interests"]) or "ยังไม่มี")
+                "**เพื่อน:** "
+                + (", ".join(profile["friends"]) or "ยังไม่มี")
             )
 
         with right:
-            st.markdown("### ประวัติการยืม")
+            st.markdown("### จอที่ชอบ")
 
-            if profile["borrowed"]:
+            if profile["liked"]:
                 st.dataframe(
-                    pd.DataFrame(profile["borrowed"]),
+                    pd.DataFrame(profile["liked"]),
                     use_container_width=True,
                     hide_index=True,
                 )
             else:
-                st.info("ยังไม่มีประวัติการยืม")
+                st.info("ยังไม่ได้กดชอบจอใดเลย")
 
 
 # ==================================================
@@ -301,19 +283,17 @@ if page == "Dashboard":
 
 elif page == "Recommendations":
 
-    st.subheader("✨ หนังสือที่แนะนำ")
+    st.subheader("✨ จอที่แนะนำ")
 
-    student_id = student_selector("rec_student")
+    user_id = user_selector("rec_user")
 
     top_n = st.slider("จำนวนคำแนะนำ", 3, 12, 6)
 
-    rows = recommend_books(student_id, top_n)
+    rows = recommend_monitors(user_id, top_n)
 
     st.caption(
-        "คะแนนตัวอย่าง = เพื่อน × 3 "
-        "+ หมวดความสนใจ × 2 "
-        "+ ความนิยม × 0.20 "
-        "+ rating เฉลี่ย × 0.50"
+        "คะแนน = จำนวนเพื่อนที่ชอบจอนี้ "
+        "(ถ้าคะแนนเท่ากัน จอที่มีคนชอบมากกว่าจะขึ้นก่อน)"
     )
 
     if not rows:
@@ -321,16 +301,13 @@ elif page == "Recommendations":
 
     for i, row in enumerate(rows, start=1):
 
-        authors = ", ".join(row.get("authors") or []) or "ไม่ระบุผู้แต่ง"
-        categories = ", ".join(row.get("categories") or []) or "ไม่ระบุหมวด"
-
-        # การ์ดแสดงหนังสือที่แนะนำ 1 เล่ม
+        # การ์ดแสดงจอที่แนะนำ 1 รุ่น
         st.markdown(
             f"""
-            <div class="book-card">
-              <span class="score-pill">#{i} · score {row['score']:.2f}</span>
-              <h3 style="margin:.55rem 0 .2rem 0">{row['title']}</h3>
-              <div class="muted">{row['book_id']} · {authors} · {categories}</div>
+            <div class="monitor-card">
+              <span class="score-pill">#{i} · score {row['score']}</span>
+              <h3 style="margin:.55rem 0 .2rem 0">{row['name']}</h3>
+              <div class="muted">{row['monitor_id']}</div>
               <p><b>เหตุผล:</b> {explain_reason(row)}</p>
             </div>
             """,
@@ -339,29 +316,19 @@ elif page == "Recommendations":
 
 
 # ==================================================
-# 3. Book Search
+# 3. Monitor Search
 # ==================================================
 
-elif page == "Book Search":
+elif page == "Monitor Search":
 
-    st.subheader("🔎 ค้นหาหนังสือ")
+    st.subheader("🔎 ค้นหาจอ")
 
-    c1, c2 = st.columns([2, 1])
-
-    keyword = c1.text_input(
-        "ชื่อหนังสือหรือผู้แต่ง",
-        placeholder="เช่น Python, Neo4j, Kanya",
+    keyword = st.text_input(
+        "ชื่อจอหรือยี่ห้อ",
+        placeholder="เช่น Dell, LG, ASUS",
     )
 
-    categories = [""] + list_categories()
-
-    category = c2.selectbox(
-        "หมวด",
-        categories,
-        format_func=lambda x: "ทุกหมวด" if x == "" else x,
-    )
-
-    rows = search_books(keyword, category)
+    rows = search_monitors(keyword)
 
     st.write(f"พบ {len(rows)} รายการ")
 
@@ -373,49 +340,34 @@ elif page == "Book Search":
 
 
 # ==================================================
-# 4. Borrow / Rate
+# 4. Like Monitor
 # ==================================================
 
-elif page == "Borrow / Rate":
+elif page == "Like Monitor":
 
-    st.subheader("📝 บันทึกการยืมและให้คะแนน")
+    st.subheader("👍 บันทึกการกดชอบ")
 
-    student_id = student_selector("borrow_student")
+    user_id = user_selector("like_user")
 
-    books = search_books()
+    monitors = search_monitors()
 
-    if not books:
-        st.info("ยังไม่มีหนังสือ")
+    if not monitors:
+        st.info("ยังไม่มีข้อมูลจอ")
         st.stop()
 
-    book_labels = {f"{b['book_id']} — {b['title']}": b["book_id"] for b in books}
+    monitor_labels = {
+        f"{m['monitor_id']} — {m['name']}": m["monitor_id"]
+        for m in monitors
+    }
 
-    selected = st.selectbox("หนังสือ", list(book_labels))
+    selected = st.selectbox("จอ", list(monitor_labels))
 
-    borrow_date = st.date_input("วันที่ยืม", value=date.today())
+    if st.button("กดชอบ", type="primary", use_container_width=True):
 
-    use_rating = st.checkbox("ให้คะแนนพร้อมกัน")
+        # บันทึกความสัมพันธ์ LIKES ลง Neo4j
+        record_like(user_id, monitor_labels[selected])
 
-    rating = st.slider(
-        "คะแนน",
-        1.0,
-        5.0,
-        4.0,
-        0.5,
-        disabled=not use_rating,
-    )
-
-    if st.button("บันทึก", type="primary", use_container_width=True):
-
-        # บันทึกความสัมพันธ์ BORROWED ลง Neo4j
-        record_borrow(
-            student_id,
-            book_labels[selected],
-            borrow_date.isoformat(),
-            rating if use_rating else None,
-        )
-
-        st.success("บันทึกความสัมพันธ์ BORROWED แล้ว")
+        st.success("บันทึกความสัมพันธ์ LIKES แล้ว")
 
 
 # ==================================================
@@ -426,9 +378,9 @@ elif page == "Graph Explorer":
 
     st.subheader("🕸️ Graph Explorer")
 
-    student_id = student_selector("graph_student")
+    user_id = user_selector("graph_user")
 
-    rows = graph_neighborhood(student_id)
+    rows = graph_neighborhood(user_id)
 
     if not rows:
         st.info("ยังไม่มี neighborhood graph")
@@ -487,11 +439,8 @@ elif page == "Admin / Setup":
         """
         **Graph schema**
 
-        - `(:Student)-[:FRIEND_OF]-(:Student)`
-        - `(:Student)-[:BORROWED {borrow_date, rating}]->(:Book)`
-        - `(:Student)-[:INTERESTED_IN]->(:Category)`
-        - `(:Book)-[:IN_CATEGORY]->(:Category)`
-        - `(:Author)-[:WROTE]->(:Book)`
+        - `(:User)-[:FRIEND_OF]-(:User)`
+        - `(:User)-[:LIKES]->(:Monitor)`
         """
     )
 

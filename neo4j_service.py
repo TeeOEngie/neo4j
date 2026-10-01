@@ -1,335 +1,341 @@
 from __future__ import annotations
 
-from typing import Any
-
 import streamlit as st
-from neo4j import GraphDatabase, RoutingControl
+from neo4j import GraphDatabase
 
 
-def _config() -> tuple[str, str, str, str]:
-    cfg = st.secrets["neo4j"]
-    return (
-        cfg["uri"],
-        cfg["username"],
-        cfg["password"],
-        cfg.get("database", "c2f5effc"),
-    )
+# ==================================================
+# เชื่อมต่อ Neo4j (สร้าง driver ครั้งเดียว แล้วใช้ซ้ำ)
+# ==================================================
 
-
-@st.cache_resource(show_spinner=False)
+@st.cache_resource
 def get_driver():
-    """Create one thread-safe Neo4j Driver for the Streamlit process."""
-    uri, username, password, _ = _config()
-    driver = GraphDatabase.driver(uri, auth=(username, password))
-    driver.verify_connectivity()
-    return driver
-
-
-def query(cypher: str, parameters: dict[str, Any] | None = None, *, write: bool = False) -> list[dict[str, Any]]:
-    """Execute parameterized Cypher and return rows as dictionaries."""
-    _, _, _, database = _config()
-    records, _, _ = get_driver().execute_query(
-        cypher,
-        parameters_=parameters or {},
-        database_=database,
-        routing_=RoutingControl.WRITE if write else RoutingControl.READ,
+    cfg = st.secrets["neo4j"]
+    return GraphDatabase.driver(
+        cfg["uri"],
+        auth=(cfg["username"], cfg["password"]),
     )
-    return [record.data() for record in records]
 
+
+def _database() -> str:
+    # ถ้าไม่ได้ใส่ database ใน secrets ให้ใช้ "neo4j"
+    return st.secrets["neo4j"].get("database", "neo4j")
+
+
+def run(query: str, **params) -> list[dict]:
+    # รัน Cypher แล้วแปลงผลเป็น list ของ dict
+    records, _, _ = get_driver().execute_query(
+        query,
+        database_=_database(),
+        **params,
+    )
+    return [r.data() for r in records]
+
+
+# ==================================================
+# เช็กว่าเชื่อมต่อได้
+# ==================================================
 
 def ping() -> bool:
-    rows = query("RETURN 1 AS ok")
-    return bool(rows and rows[0]["ok"] == 1)
+    rows = run("RETURN 1 AS ok")
+    return bool(rows) and rows[0]["ok"] == 1
 
 
-def create_schema() -> None:
-    statements = [
-        "CREATE CONSTRAINT student_id_unique IF NOT EXISTS FOR (s:Student) REQUIRE s.student_id IS UNIQUE",
-        "CREATE CONSTRAINT book_id_unique IF NOT EXISTS FOR (b:Book) REQUIRE b.book_id IS UNIQUE",
-        "CREATE CONSTRAINT author_id_unique IF NOT EXISTS FOR (a:Author) REQUIRE a.author_id IS UNIQUE",
-        "CREATE CONSTRAINT category_name_unique IF NOT EXISTS FOR (c:Category) REQUIRE c.name IS UNIQUE",
-    ]
-    for stmt in statements:
-        query(stmt, write=True)
+# ==================================================
+# รายชื่อผู้ใช้ทั้งหมด
+# ==================================================
+
+def get_users() -> list[dict]:
+    return run(
+        """
+        MATCH (u:User)
+        RETURN u.user_id AS user_id, u.name AS name
+        ORDER BY user_id
+        """
+    )
+
+
+# ==================================================
+# ตัวเลขภาพรวมสำหรับ Dashboard
+# ==================================================
+
+def get_dashboard_metrics() -> dict:
+    rows = run(
+        """
+        CALL { MATCH (u:User) RETURN count(u) AS users }
+        CALL { MATCH (m:Monitor) RETURN count(m) AS monitors }
+        CALL { MATCH (:User)-[r:LIKES]->(:Monitor) RETURN count(r) AS likes }
+        CALL { MATCH (:User)-[f:FRIEND_OF]->(:User) RETURN count(f) AS friendships }
+        RETURN users, monitors, likes, friendships
+        """
+    )
+    return rows[0] if rows else {}
+
+
+# ==================================================
+# โปรไฟล์ผู้ใช้: ชื่อ เพื่อน และจอที่ชอบ
+# ==================================================
+
+def get_profile(user_id: str) -> dict | None:
+    rows = run(
+        """
+        MATCH (u:User {user_id: $user_id})
+
+        // เพื่อนทั้งสองทิศ
+        OPTIONAL MATCH (u)-[:FRIEND_OF]-(f:User)
+        WITH u, collect(DISTINCT f.name) AS friends
+
+        // จอที่ชอบ (ถ้าไม่มี collect จะข้าม null ให้เอง)
+        OPTIONAL MATCH (u)-[:LIKES]->(m:Monitor)
+        WITH u, friends,
+             collect(
+                 CASE WHEN m IS NULL THEN null
+                      ELSE {monitor_id: m.monitor_id, name: m.name}
+                 END
+             ) AS liked
+
+        RETURN u.user_id AS user_id,
+               u.name AS name,
+               friends,
+               liked
+        """,
+        user_id=user_id,
+    )
+
+    if not rows:
+        return None
+
+    profile = rows[0]
+    profile["friends"] = sorted(profile["friends"])
+    profile["liked"] = sorted(profile["liked"], key=lambda x: x["monitor_id"])
+    return profile
+
+
+# ==================================================
+# แนะนำจอจากเพื่อน (แบบเดียวกับ Step 19)
+# ==================================================
+
+def recommend_monitors(user_id: str, top_n: int = 6) -> list[dict]:
+    return run(
+        """
+        MATCH (me:User {user_id: $user_id})
+              -[:FRIEND_OF]-(friend:User)
+              -[:LIKES]->(m:Monitor)
+
+        // ตัดจอที่ตัวเองชอบอยู่แล้ว
+        WHERE NOT EXISTS { MATCH (me)-[:LIKES]->(m) }
+
+        WITH m, collect(DISTINCT friend.name) AS friend_names
+
+        // นับว่าทั้งระบบมีคนชอบจอนี้กี่คน ใช้เป็นตัวตัดสินตอนคะแนนเท่ากัน
+        OPTIONAL MATCH (:User)-[l:LIKES]->(m)
+        WITH m, friend_names, count(l) AS popularity
+
+        RETURN m.monitor_id AS monitor_id,
+               m.name AS name,
+               size(friend_names) AS friend_count,
+               friend_names,
+               popularity,
+               size(friend_names) AS score
+
+        ORDER BY score DESC, popularity DESC, name
+        LIMIT $top_n
+        """,
+        user_id=user_id,
+        top_n=top_n,
+    )
+
+
+# ==================================================
+# ค้นหาจอจากชื่อ
+# ==================================================
+
+def search_monitors(keyword: str = "") -> list[dict]:
+    return run(
+        """
+        MATCH (m:Monitor)
+        WHERE $keyword = ""
+           OR toLower(m.name) CONTAINS toLower($keyword)
+
+        OPTIONAL MATCH (:User)-[l:LIKES]->(m)
+
+        RETURN m.monitor_id AS monitor_id,
+               m.name AS name,
+               count(l) AS likes
+        ORDER BY monitor_id
+        """,
+        keyword=keyword.strip(),
+    )
+
+
+# ==================================================
+# บันทึกการกดชอบ
+# ==================================================
+
+def record_like(user_id: str, monitor_id: str) -> None:
+    run(
+        """
+        MATCH (u:User {user_id: $user_id})
+        MATCH (m:Monitor {monitor_id: $monitor_id})
+        MERGE (u)-[:LIKES]->(m)   // กดซ้ำก็ไม่สร้างเส้นซ้ำ
+        """,
+        user_id=user_id,
+        monitor_id=monitor_id,
+    )
+
+
+# ==================================================
+# ข้อมูลกราฟรอบตัวผู้ใช้ (ใช้วาดใน Graph Explorer)
+# ==================================================
+
+def graph_neighborhood(user_id: str) -> list[dict]:
+    return run(
+        """
+        MATCH (me:User {user_id: $user_id})
+
+        CALL (me) {
+            // 1) ผู้ใช้ -> เพื่อน
+            MATCH (me)-[:FRIEND_OF]-(f:User)
+            RETURN me.user_id AS source_id, 'User' AS source_label, me.name AS source_name,
+                   'FRIEND_OF' AS relationship,
+                   f.user_id AS target_id, 'User' AS target_label, f.name AS target_name
+
+            UNION
+
+            // 2) ผู้ใช้ -> จอที่ชอบ
+            MATCH (me)-[:LIKES]->(m:Monitor)
+            RETURN me.user_id AS source_id, 'User' AS source_label, me.name AS source_name,
+                   'LIKES' AS relationship,
+                   m.monitor_id AS target_id, 'Monitor' AS target_label, m.name AS target_name
+
+            UNION
+
+            // 3) เพื่อน -> จอที่เพื่อนชอบ
+            MATCH (me)-[:FRIEND_OF]-(f:User)-[:LIKES]->(m:Monitor)
+            RETURN f.user_id AS source_id, 'User' AS source_label, f.name AS source_name,
+                   'LIKES' AS relationship,
+                   m.monitor_id AS target_id, 'Monitor' AS target_label, m.name AS target_name
+        }
+
+        RETURN source_id, source_label, source_name,
+               relationship,
+               target_id, target_label, target_name
+        """,
+        user_id=user_id,
+    )
+
+
+# ==================================================
+# ข้อมูลตัวอย่าง (ชุดเดียวกับใน Colab)
+# ==================================================
+
+USERS = [
+    {"user_id": "U001", "name": "Tony"},
+    {"user_id": "U002", "name": "Jame"},
+    {"user_id": "U003", "name": "Jack"},
+    {"user_id": "U004", "name": "Ben"},
+    {"user_id": "U005", "name": "Smit"},
+    {"user_id": "U006", "name": "Joseph"},
+    {"user_id": "U007", "name": "Henry"},
+    {"user_id": "U008", "name": "Harry"},
+    {"user_id": "U009", "name": "Jonathan"},
+    {"user_id": "U010", "name": "Mark"},
+]
+
+MONITORS = [
+    {"monitor_id": "M001", "name": "ASUS ROG Swift PG279QM"},
+    {"monitor_id": "M002", "name": "Samsung Odyssey G9"},
+    {"monitor_id": "M003", "name": "LG UltraGear 27GP850"},
+    {"monitor_id": "M004", "name": "Acer Predator X34"},
+    {"monitor_id": "M005", "name": "MSI Optix MAG274QRF"},
+    {"monitor_id": "M006", "name": "AOC 24G2"},
+    {"monitor_id": "M007", "name": "ViewSonic VX2458"},
+    {"monitor_id": "M008", "name": "Gigabyte M27Q"},
+    {"monitor_id": "M009", "name": "Acer Nitro VG240Y"},
+    {"monitor_id": "M010", "name": "Dell S3422DWG"},
+    {"monitor_id": "M011", "name": "Dell UltraSharp U2723QE"},
+    {"monitor_id": "M012", "name": "BenQ PD2700U"},
+    {"monitor_id": "M013", "name": "LG UltraFine 27UP850"},
+    {"monitor_id": "M014", "name": "ASUS ProArt PA278CV"},
+    {"monitor_id": "M015", "name": "Eizo ColorEdge CS2731"},
+    {"monitor_id": "M016", "name": "Dell P2422H"},
+    {"monitor_id": "M017", "name": "HP E24 G4"},
+    {"monitor_id": "M018", "name": "Lenovo ThinkVision P27h-20"},
+    {"monitor_id": "M019", "name": "Samsung Smart Monitor M8"},
+    {"monitor_id": "M020", "name": "LG 34WN80C"},
+]
+
+FRIENDSHIPS = [
+    {"user1": "U001", "user2": "U005"},
+    {"user1": "U001", "user2": "U007"},
+    {"user1": "U002", "user2": "U003"},
+    {"user1": "U003", "user2": "U008"},
+    {"user1": "U004", "user2": "U006"},
+    {"user1": "U004", "user2": "U009"},
+    {"user1": "U006", "user2": "U009"},
+    {"user1": "U007", "user2": "U010"},
+    {"user1": "U002", "user2": "U007"},
+    {"user1": "U006", "user2": "U010"},
+]
+
+# (user_id, monitor_id) แต่ละคนชอบ 3 จอ
+LIKES = [
+    ("U001", "M011"), ("U001", "M012"), ("U001", "M014"),
+    ("U002", "M001"), ("U002", "M002"), ("U002", "M003"),
+    ("U003", "M003"), ("U003", "M009"), ("U003", "M005"),
+    ("U004", "M016"), ("U004", "M017"), ("U004", "M018"),
+    ("U005", "M012"), ("U005", "M015"), ("U005", "M013"),
+    ("U006", "M016"), ("U006", "M019"), ("U006", "M018"),
+    ("U007", "M001"), ("U007", "M011"), ("U007", "M020"),
+    ("U008", "M009"), ("U008", "M006"), ("U008", "M007"),
+    ("U009", "M016"), ("U009", "M017"), ("U009", "M018"),
+    ("U010", "M020"), ("U010", "M019"), ("U010", "M011"),
+]
 
 
 def seed_demo_data() -> None:
-    """Idempotent sample dataset: safe to run more than once."""
-    create_schema()
+    # Constraint ต้องรันทีละคำสั่ง
+    run("CREATE CONSTRAINT user_id_unique IF NOT EXISTS FOR (u:User) REQUIRE u.user_id IS UNIQUE")
+    run("CREATE CONSTRAINT monitor_id_unique IF NOT EXISTS FOR (m:Monitor) REQUIRE m.monitor_id IS UNIQUE")
 
-    students = [
-        {"student_id": "S001", "name": "Anan", "major": "Computer Science", "year": 2},
-        {"student_id": "S002", "name": "Mali", "major": "Computer Science", "year": 2},
-        {"student_id": "S003", "name": "Krit", "major": "Information Technology", "year": 3},
-        {"student_id": "S004", "name": "Nida", "major": "Data Science", "year": 2},
-        {"student_id": "S005", "name": "Ploy", "major": "Business Computer", "year": 3},
-        {"student_id": "S006", "name": "Ton", "major": "Computer Science", "year": 1},
-    ]
-    books = [
-        {"book_id": "B101", "title": "Python Programming", "year": 2025},
-        {"book_id": "B102", "title": "Artificial Intelligence Basics", "year": 2026},
-        {"book_id": "B103", "title": "Data Science for Students", "year": 2025},
-        {"book_id": "B104", "title": "Introduction to Database", "year": 2024},
-        {"book_id": "B105", "title": "Graph Databases with Neo4j", "year": 2026},
-        {"book_id": "B106", "title": "Machine Learning Foundations", "year": 2025},
-        {"book_id": "B107", "title": "Web Application Development", "year": 2024},
-        {"book_id": "B108", "title": "Algorithms and Problem Solving", "year": 2023},
-    ]
-    authors = [
-        {"author_id": "A01", "name": "Somchai Tech"},
-        {"author_id": "A02", "name": "Narin Data"},
-        {"author_id": "A03", "name": "Kanya AI"},
-        {"author_id": "A04", "name": "Preecha DB"},
-    ]
-    categories = ["Programming", "AI", "Data Science", "Database", "Web Development", "Algorithms"]
-
-    query(
+    # Users
+    run(
         """
         UNWIND $rows AS row
-        MERGE (s:Student {student_id: row.student_id})
-        SET s.name = row.name, s.major = row.major, s.year = row.year
+        MERGE (u:User {user_id: row.user_id})
+        SET u.name = row.name
         """,
-        {"rows": students},
-        write=True,
-    )
-    query(
-        """
-        UNWIND $rows AS row
-        MERGE (b:Book {book_id: row.book_id})
-        SET b.title = row.title, b.year = row.year
-        """,
-        {"rows": books},
-        write=True,
-    )
-    query(
-        """
-        UNWIND $rows AS row
-        MERGE (a:Author {author_id: row.author_id})
-        SET a.name = row.name
-        """,
-        {"rows": authors},
-        write=True,
-    )
-    query(
-        "UNWIND $rows AS name MERGE (:Category {name:name})",
-        {"rows": categories},
-        write=True,
+        rows=USERS,
     )
 
-    friendships = [
-        ["S001", "S002"], ["S001", "S003"], ["S001", "S004"],
-        ["S002", "S005"], ["S003", "S004"], ["S004", "S006"],
-    ]
-    query(
+    # Monitors
+    run(
         """
         UNWIND $rows AS row
-        MATCH (a:Student {student_id: row[0]}), (b:Student {student_id: row[1]})
+        MERGE (m:Monitor {monitor_id: row.monitor_id})
+        SET m.name = row.name
+        """,
+        rows=MONITORS,
+    )
+
+    # FRIEND_OF
+    run(
+        """
+        UNWIND $rows AS row
+        MATCH (a:User {user_id: row.user1})
+        MATCH (b:User {user_id: row.user2})
         MERGE (a)-[:FRIEND_OF]->(b)
         """,
-        {"rows": friendships},
-        write=True,
+        rows=FRIENDSHIPS,
     )
 
-    borrows = [
-        {"s": "S001", "b": "B101", "date": "2026-08-01", "rating": 4.0},
-        {"s": "S001", "b": "B108", "date": "2026-08-14", "rating": 4.0},
-        {"s": "S002", "b": "B103", "date": "2026-08-05", "rating": 5.0},
-        {"s": "S002", "b": "B102", "date": "2026-08-18", "rating": 4.0},
-        {"s": "S003", "b": "B103", "date": "2026-08-07", "rating": 4.0},
-        {"s": "S003", "b": "B104", "date": "2026-08-20", "rating": 5.0},
-        {"s": "S004", "b": "B105", "date": "2026-08-09", "rating": 5.0},
-        {"s": "S004", "b": "B103", "date": "2026-08-24", "rating": 5.0},
-        {"s": "S005", "b": "B107", "date": "2026-08-11", "rating": 4.0},
-        {"s": "S006", "b": "B106", "date": "2026-08-12", "rating": 4.0},
-    ]
-    query(
+    # LIKES
+    run(
         """
         UNWIND $rows AS row
-        MATCH (s:Student {student_id: row.s}), (b:Book {book_id: row.b})
-        MERGE (s)-[r:BORROWED]->(b)
-        SET r.borrow_date = date(row.date), r.rating = row.rating
+        MATCH (u:User {user_id: row.user_id})
+        MATCH (m:Monitor {monitor_id: row.monitor_id})
+        MERGE (u)-[:LIKES]->(m)
         """,
-        {"rows": borrows},
-        write=True,
-    )
-
-    interests = [
-        ["S001", "Programming"], ["S001", "Database"],
-        ["S002", "AI"], ["S002", "Data Science"],
-        ["S003", "Database"], ["S003", "Data Science"],
-        ["S004", "AI"], ["S004", "Data Science"],
-        ["S005", "Web Development"], ["S006", "Programming"],
-    ]
-    query(
-        """
-        UNWIND $rows AS row
-        MATCH (s:Student {student_id: row[0]}), (c:Category {name: row[1]})
-        MERGE (s)-[:INTERESTED_IN]->(c)
-        """,
-        {"rows": interests},
-        write=True,
-    )
-
-    book_categories = [
-        ["B101", "Programming"], ["B102", "AI"], ["B103", "Data Science"],
-        ["B104", "Database"], ["B105", "Database"], ["B106", "AI"],
-        ["B106", "Data Science"], ["B107", "Web Development"],
-        ["B108", "Algorithms"], ["B108", "Programming"],
-    ]
-    query(
-        """
-        UNWIND $rows AS row
-        MATCH (b:Book {book_id: row[0]}), (c:Category {name: row[1]})
-        MERGE (b)-[:IN_CATEGORY]->(c)
-        """,
-        {"rows": book_categories},
-        write=True,
-    )
-
-    wrote = [
-        ["A01", "B101"], ["A03", "B102"], ["A02", "B103"], ["A04", "B104"],
-        ["A04", "B105"], ["A03", "B106"], ["A01", "B107"], ["A01", "B108"],
-    ]
-    query(
-        """
-        UNWIND $rows AS row
-        MATCH (a:Author {author_id: row[0]}), (b:Book {book_id: row[1]})
-        MERGE (a)-[:WROTE]->(b)
-        """,
-        {"rows": wrote},
-        write=True,
-    )
-
-
-def get_students() -> list[dict[str, Any]]:
-    return query("MATCH (s:Student) RETURN s.student_id AS student_id, s.name AS name, s.major AS major, s.year AS year ORDER BY s.student_id")
-
-
-def get_dashboard_metrics() -> dict[str, int]:
-    rows = query(
-        """
-        MATCH (s:Student) WITH count(s) AS students
-        MATCH (b:Book) WITH students, count(b) AS books
-        MATCH ()-[r:BORROWED]->() WITH students, books, count(r) AS borrows
-        MATCH ()-[f:FRIEND_OF]->()
-        RETURN students, books, borrows, count(f) AS friendships
-        """
-    )
-    return rows[0] if rows else {"students": 0, "books": 0, "borrows": 0, "friendships": 0}
-
-
-def get_profile(student_id: str) -> dict[str, Any] | None:
-    rows = query(
-        """
-        MATCH (s:Student {student_id:$student_id})
-        OPTIONAL MATCH (s)-[:INTERESTED_IN]->(c:Category)
-        OPTIONAL MATCH (s)-[:BORROWED]->(b:Book)
-        RETURN s.student_id AS student_id, s.name AS name, s.major AS major, s.year AS year,
-               collect(DISTINCT c.name) AS interests,
-               collect(DISTINCT {book_id:b.book_id, title:b.title}) AS borrowed
-        """,
-        {"student_id": student_id},
-    )
-    if not rows:
-        return None
-    row = rows[0]
-    row["borrowed"] = [x for x in row["borrowed"] if x.get("book_id")]
-    return row
-
-
-def recommend_books(student_id: str, limit: int = 8) -> list[dict[str, Any]]:
-    """Explainable hybrid score: social + interests + popularity + ratings."""
-    return query(
-        """
-        MATCH (u:Student {student_id:$student_id})
-        MATCH (b:Book)
-        WHERE NOT (u)-[:BORROWED]->(b)
-
-        OPTIONAL MATCH (u)-[:FRIEND_OF]-(f:Student)-[:BORROWED]->(b)
-        WITH u, b, count(DISTINCT f) AS friend_count,
-             [x IN collect(DISTINCT f.name) WHERE x IS NOT NULL][0..3] AS friend_names
-
-        OPTIONAL MATCH (u)-[:INTERESTED_IN]->(c:Category)<-[:IN_CATEGORY]-(b)
-        WITH b, friend_count, friend_names,
-             count(DISTINCT c) AS interest_matches,
-             [x IN collect(DISTINCT c.name) WHERE x IS NOT NULL] AS matched_categories
-
-        OPTIONAL MATCH (:Student)-[br:BORROWED]->(b)
-        WITH b, friend_count, friend_names, interest_matches, matched_categories,
-             count(br) AS popularity,
-             avg(br.rating) AS avg_rating
-
-        WITH b, friend_count, friend_names, interest_matches, matched_categories,
-             popularity, coalesce(avg_rating, 0.0) AS avg_rating,
-             (friend_count * 3.0) + (interest_matches * 2.0) +
-             (popularity * 0.20) + (coalesce(avg_rating, 0.0) * 0.50) AS score
-        WHERE friend_count > 0 OR interest_matches > 0 OR popularity > 0
-
-        OPTIONAL MATCH (a:Author)-[:WROTE]->(b)
-        OPTIONAL MATCH (b)-[:IN_CATEGORY]->(allc:Category)
-        RETURN b.book_id AS book_id, b.title AS title, b.year AS year,
-               collect(DISTINCT a.name) AS authors,
-               collect(DISTINCT allc.name) AS categories,
-               friend_count, friend_names, interest_matches, matched_categories,
-               popularity, round(avg_rating * 100) / 100.0 AS avg_rating,
-               round(score * 100) / 100.0 AS score
-        ORDER BY score DESC, b.title
-        LIMIT $limit
-        """,
-        {"student_id": student_id, "limit": int(limit)},
-    )
-
-
-def search_books(keyword: str = "", category: str | None = None) -> list[dict[str, Any]]:
-    return query(
-        """
-        MATCH (b:Book)
-        OPTIONAL MATCH (a:Author)-[:WROTE]->(b)
-        OPTIONAL MATCH (b)-[:IN_CATEGORY]->(c:Category)
-        WITH b, collect(DISTINCT a.name) AS authors, collect(DISTINCT c.name) AS categories
-        WHERE ($keyword = '' OR toLower(b.title) CONTAINS toLower($keyword)
-               OR any(x IN authors WHERE toLower(x) CONTAINS toLower($keyword)))
-          AND ($category = '' OR $category IN categories)
-        RETURN b.book_id AS book_id, b.title AS title, b.year AS year,
-               authors, categories
-        ORDER BY b.title
-        """,
-        {"keyword": keyword.strip(), "category": category or ""},
-    )
-
-
-def list_categories() -> list[str]:
-    return [row["name"] for row in query("MATCH (c:Category) RETURN c.name AS name ORDER BY c.name")]
-
-
-def record_borrow(student_id: str, book_id: str, borrow_date: str, rating: float | None = None) -> None:
-    query(
-        """
-        MATCH (s:Student {student_id:$student_id}), (b:Book {book_id:$book_id})
-        MERGE (s)-[r:BORROWED]->(b)
-        SET r.borrow_date = date($borrow_date)
-        FOREACH (_ IN CASE WHEN $rating IS NULL THEN [] ELSE [1] END | SET r.rating = $rating)
-        """,
-        {"student_id": student_id, "book_id": book_id, "borrow_date": borrow_date, "rating": rating},
-        write=True,
-    )
-
-
-def graph_neighborhood(student_id: str, limit: int = 40) -> list[dict[str, Any]]:
-    return query(
-        """
-        MATCH (u:Student {student_id:$student_id})
-        OPTIONAL MATCH p=(u)-[:FRIEND_OF|BORROWED|INTERESTED_IN*1..2]-(x)
-        WITH u, collect(p)[0..$limit] AS paths
-        UNWIND paths AS p
-        UNWIND relationships(p) AS r
-        WITH DISTINCT startNode(r) AS s, r, endNode(r) AS t
-        RETURN elementId(s) AS source_id, labels(s)[0] AS source_label,
-               coalesce(s.name, s.title, s.student_id, s.book_id) AS source_name,
-               type(r) AS relationship,
-               elementId(t) AS target_id, labels(t)[0] AS target_label,
-               coalesce(t.name, t.title, t.student_id, t.book_id) AS target_name
-        LIMIT $limit
-        """,
-        {"student_id": student_id, "limit": int(limit)},
+        rows=[{"user_id": u, "monitor_id": m} for u, m in LIKES],
     )
