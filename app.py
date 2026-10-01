@@ -29,7 +29,7 @@ st.set_page_config(
 )
 
 # ตำแหน่งไฟล์รูปภาพ อยู่โฟลเดอร์เดียวกับ app.py
-SIDEBAR_IMAGE = Path(__file__).parent / "monitor.png"
+SIDEBAR_IMAGE = Path(__file__).parent / "image.png"
 
 # ==================================================
 # ตกแต่ง CSS
@@ -213,7 +213,7 @@ with st.sidebar:
     if SIDEBAR_IMAGE.is_file():
         st.image(str(SIDEBAR_IMAGE), caption="rub", width=120)
     else:
-        st.info("กรุณาวางไฟล์ monitor.png ไว้ในโฟลเดอร์เดียวกับ app.py")
+        st.info("กรุณาวางไฟล์ image.png ไว้ในโฟลเดอร์เดียวกับ app.py")
 
 
 # ==================================================
