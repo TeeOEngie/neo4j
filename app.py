@@ -211,7 +211,7 @@ with st.sidebar:
 
     # ถ้ามีไฟล์ monitor.png ให้แสดงรูป ถ้าไม่มีให้แสดงข้อความเตือน
     if SIDEBAR_IMAGE.is_file():
-        st.image(str(SIDEBAR_IMAGE), caption="rub", width=120)
+        st.image(str(SIDEBAR_IMAGE), caption="", width=120)
     else:
         st.info("กรุณาวางไฟล์ image.png ไว้ในโฟลเดอร์เดียวกับ app.py")
 
