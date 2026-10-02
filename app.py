@@ -29,7 +29,7 @@ st.set_page_config(
 )
 
 # ตำแหน่งไฟล์รูปภาพ อยู่โฟลเดอร์เดียวกับ app.py
-SIDEBAR_IMAGE = Path(__file__).parent / "image.png"
+SIDEBAR_IMAGE = Path(__file__).parent / "library.png"
 
 # ==================================================
 # ตกแต่ง CSS
@@ -38,57 +38,193 @@ SIDEBAR_IMAGE = Path(__file__).parent / "image.png"
 st.markdown(
     """
     <style>
-      .block-container {
-        padding-top: 1.3rem;
-        padding-bottom: 2rem;
+      /* ฟอนต์ภาษาไทย Prompt */
+      @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap');
+
+      html, body, p, h1, h2, h3, h4, label, li {
+        font-family: 'Prompt', sans-serif !important;
       }
 
+      .block-container {
+        padding-top: 1.5rem;
+        padding-bottom: 3rem;
+        max-width: 1200px;
+      }
+
+      /* ===== Hero ด้านบน ===== */
       .hero {
-        padding: 1.4rem 1.6rem;
-        border-radius: 22px;
-        background: linear-gradient(
-          120deg,
-          #111827 0%,
-          #1f2937 55%,
-          #0f766e 100%
-        );
-        color: white;
-        margin-bottom: 1rem;
+        padding: 2rem 2.2rem;
+        border-radius: 24px;
+        background:
+          radial-gradient(circle at 85% 20%, rgba(34,211,238,.35), transparent 45%),
+          radial-gradient(circle at 10% 90%, rgba(99,102,241,.35), transparent 40%),
+          linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        box-shadow: 0 10px 30px rgba(15,23,42,.25);
+        margin-bottom: 1.5rem;
+      }
+
+      .hero-badge {
+        display: inline-block;
+        padding: .25rem .75rem;
+        border-radius: 999px;
+        background: rgba(34,211,238,.18);
+        color: #67e8f9;
+        font-size: .8rem;
+        font-weight: 600;
+        margin-bottom: .6rem;
       }
 
       .hero h1 {
         margin: 0;
-        font-size: 2.15rem;
+        font-size: 2.4rem;
+        font-weight: 700;
+        color: #f8fafc;
       }
 
       .hero p {
-        opacity: .88;
-        margin: .35rem 0 0 0;
+        margin: .4rem 0 0 0;
+        color: #cbd5e1;
+        font-size: 1.05rem;
       }
 
-      .monitor-card {
-        padding: 1rem 1.1rem;
-        border: 1px solid rgba(128,128,128,.25);
-        border-radius: 16px;
-        margin-bottom: .75rem;
+      /* ===== กล่องตัวเลข Dashboard ===== */
+      [data-testid="stMetric"] {
+        background: rgba(8,145,178,.07);
+        border: 1px solid rgba(8,145,178,.25);
+        border-radius: 18px;
+        padding: 1rem 1.2rem;
       }
 
-      .score-pill {
-        display: inline-block;
-        padding: .2rem .55rem;
-        border-radius: 999px;
-        background: #0f766e;
-        color: white;
-        font-size: .8rem;
+      [data-testid="stMetricValue"] {
+        color: #0891b2;
         font-weight: 700;
       }
 
-      .muted {
-        opacity: .72;
-        font-size: .9rem;
+      /* ===== การ์ดจอที่แนะนำ ===== */
+      .monitor-card {
+        padding: 1.1rem 1.3rem;
+        border-radius: 18px;
+        background: rgba(148,163,184,.08);
+        border: 1px solid rgba(148,163,184,.25);
+        margin-bottom: .9rem;
+        transition: border-color .2s, transform .2s;
       }
 
-      /* จัดรูปภาพในแถบด้านซ้ายให้มุมโค้ง */
+      .monitor-card:hover {
+        border-color: rgba(8,145,178,.6);
+        transform: translateY(-2px);
+      }
+
+      .card-top {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .rank {
+        flex: 0 0 auto;
+        width: 46px;
+        height: 46px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        color: white;
+        background: linear-gradient(135deg, #06b6d4, #6366f1);
+      }
+
+      .card-title {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .card-title h3 {
+        margin: 0;
+        font-size: 1.15rem;
+      }
+
+      .score {
+        text-align: right;
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: #0891b2;
+        line-height: 1;
+      }
+
+      .score small {
+        display: block;
+        font-size: .7rem;
+        opacity: .7;
+        font-weight: 500;
+      }
+
+      /* แถบคะแนน */
+      .bar {
+        height: 6px;
+        border-radius: 999px;
+        background: rgba(148,163,184,.2);
+        margin: .9rem 0 .7rem 0;
+        overflow: hidden;
+      }
+
+      .bar > div {
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #06b6d4, #6366f1);
+      }
+
+      /* ป้ายชื่อเพื่อน */
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .4rem;
+      }
+
+      .chip {
+        padding: .2rem .65rem;
+        border-radius: 999px;
+        background: rgba(99,102,241,.15);
+        color: #6366f1;
+        font-size: .82rem;
+        font-weight: 500;
+      }
+
+      .muted {
+        opacity: .7;
+        font-size: .88rem;
+      }
+
+      /* ===== การ์ดโปรไฟล์ ===== */
+      .profile-card {
+        padding: 1.3rem;
+        border-radius: 18px;
+        background: rgba(8,145,178,.07);
+        border: 1px solid rgba(8,145,178,.25);
+      }
+
+      .avatar {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: white;
+        background: linear-gradient(135deg, #06b6d4, #6366f1);
+        margin-bottom: .7rem;
+      }
+
+      /* ===== ปุ่มหลัก ===== */
+      .stButton > button[kind="primary"] {
+        background: linear-gradient(90deg, #06b6d4, #6366f1);
+        border: none;
+        color: white;
+        font-weight: 700;
+        border-radius: 12px;
+      }
+
+      /* รูปใน sidebar มุมโค้ง */
       [data-testid="stSidebar"] img {
         border-radius: 14px;
       }
@@ -114,8 +250,7 @@ def require_connection() -> None:
             '[neo4j]\n'
             'uri = "neo4j+s://YOUR_INSTANCE.databases.neo4j.io"\n'
             'username = "neo4j"\n'
-            'password = "YOUR_PASSWORD"\n'
-            'database = "neo4j"',
+            'password = "YOUR_PASSWORD"',
             language="toml",
         )
 
@@ -155,23 +290,11 @@ def user_selector(key: str = "user") -> str:
 
 
 # ==================================================
-# อธิบายเหตุผลของคำแนะนำ
+# สร้างป้ายชื่อเพื่อน (ใช้ทั้งหน้า Dashboard และ Recommendations)
 # ==================================================
 
-def explain_reason(row: dict) -> str:
-    parts = []
-
-    if row.get("friend_count", 0):
-        friends = ", ".join(row.get("friend_names") or [])
-        parts.append(
-            f"เพื่อน {row['friend_count']} คนชอบจอนี้"
-            + (f" ({friends})" if friends else "")
-        )
-
-    if row.get("popularity", 0):
-        parts.append(f"มีคนชอบทั้งหมด {row['popularity']} คน")
-
-    return " • ".join(parts) or "แนะนำจากข้อมูลพฤติกรรมโดยรวม"
+def friend_chips(names: list[str]) -> str:
+    return "".join(f'<span class="chip">👤 {n}</span>' for n in names)
 
 
 # ==================================================
@@ -209,11 +332,11 @@ with st.sidebar:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ถ้ามีไฟล์ monitor.png ให้แสดงรูป ถ้าไม่มีให้แสดงข้อความเตือน
+    # ถ้ามีไฟล์รูปให้แสดง ถ้าไม่มีให้แสดงข้อความเตือน
     if SIDEBAR_IMAGE.is_file():
-        st.image(str(SIDEBAR_IMAGE), caption="", width=120)
+        st.image(str(SIDEBAR_IMAGE), caption="rub", width=120)
     else:
-        st.info("กรุณาวางไฟล์ image.png ไว้ในโฟลเดอร์เดียวกับ app.py")
+        st.info("กรุณาวางไฟล์ library.png ไว้ในโฟลเดอร์เดียวกับ app.py")
 
 
 # ==================================================
@@ -223,8 +346,9 @@ with st.sidebar:
 st.markdown(
     """
     <div class="hero">
-      <h1>🖥️ MonitorGraph Recommendation System</h1>
-      <p>ระบบแนะนำจอคอมพิวเตอร์ด้วย Graph Database ที่อธิบายเหตุผลของคำแนะนำได้</p>
+      <div class="hero-badge">Neo4j Aura · Streamlit</div>
+      <h1>🖥️ MonitorGraph</h1>
+      <p>ระบบแนะนำจอคอมพิวเตอร์จากความชอบของเพื่อน ด้วย Graph Database</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -237,15 +361,15 @@ st.markdown(
 
 if page == "Dashboard":
 
-    st.subheader("ภาพรวมระบบ")
+    st.subheader("📊 ภาพรวมระบบ")
 
     m = get_dashboard_metrics()
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Users", m.get("users", 0))
-    c2.metric("Monitors", m.get("monitors", 0))
-    c3.metric("Like relationships", m.get("likes", 0))
-    c4.metric("Friend relationships", m.get("friendships", 0))
+    c1.metric("👤 Users", m.get("users", 0))
+    c2.metric("🖥️ Monitors", m.get("monitors", 0))
+    c3.metric("👍 Likes", m.get("likes", 0))
+    c4.metric("🤝 Friends", m.get("friendships", 0))
 
     st.divider()
 
@@ -257,15 +381,24 @@ if page == "Dashboard":
         left, right = st.columns([1, 2])
 
         with left:
-            st.markdown(f"### {profile['name']}")
-            st.write(f"**รหัส:** {profile['user_id']}")
-            st.write(
-                "**เพื่อน:** "
-                + (", ".join(profile["friends"]) or "ยังไม่มี")
+            chips = friend_chips(profile["friends"]) or '<span class="muted">ยังไม่มีเพื่อน</span>'
+
+            # การ์ดโปรไฟล์: ตัวอักษรแรกของชื่อ + ชื่อ + รหัส + เพื่อน
+            st.markdown(
+                f"""
+                <div class="profile-card">
+                  <div class="avatar">{profile['name'][0]}</div>
+                  <h3 style="margin:0">{profile['name']}</h3>
+                  <div class="muted">{profile['user_id']}</div>
+                  <p style="margin:.9rem 0 .4rem 0"><b>เพื่อน</b></p>
+                  <div class="chips">{chips}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
             )
 
         with right:
-            st.markdown("### จอที่ชอบ")
+            st.markdown("### 🖥️ จอที่ชอบ")
 
             if profile["liked"]:
                 st.dataframe(
@@ -285,9 +418,13 @@ elif page == "Recommendations":
 
     st.subheader("✨ จอที่แนะนำ")
 
-    user_id = user_selector("rec_user")
+    c1, c2 = st.columns([2, 1])
 
-    top_n = st.slider("จำนวนคำแนะนำ", 3, 12, 6)
+    with c1:
+        user_id = user_selector("rec_user")
+
+    with c2:
+        top_n = st.slider("จำนวนคำแนะนำ", 3, 12, 6)
 
     rows = recommend_monitors(user_id, top_n)
 
@@ -299,16 +436,27 @@ elif page == "Recommendations":
     if not rows:
         st.info("ยังไม่มีคำแนะนำสำหรับผู้ใช้นี้")
 
+    # คะแนนสูงสุด ใช้คำนวณความยาวแถบ
+    max_score = max((r["score"] for r in rows), default=1)
+
     for i, row in enumerate(rows, start=1):
+
+        pct = int(row["score"] / max_score * 100)   # ความยาวแถบเป็น %
 
         # การ์ดแสดงจอที่แนะนำ 1 รุ่น
         st.markdown(
             f"""
             <div class="monitor-card">
-              <span class="score-pill">#{i} · score {row['score']}</span>
-              <h3 style="margin:.55rem 0 .2rem 0">{row['name']}</h3>
-              <div class="muted">{row['monitor_id']}</div>
-              <p><b>เหตุผล:</b> {explain_reason(row)}</p>
+              <div class="card-top">
+                <div class="rank">#{i}</div>
+                <div class="card-title">
+                  <h3>{row['name']}</h3>
+                  <div class="muted">{row['monitor_id']} · มีคนชอบทั้งหมด {row['popularity']} คน</div>
+                </div>
+                <div class="score">{row['score']}<small>คะแนน</small></div>
+              </div>
+              <div class="bar"><div style="width:{pct}%"></div></div>
+              <div class="chips">{friend_chips(row.get('friend_names') or [])}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -330,7 +478,7 @@ elif page == "Monitor Search":
 
     rows = search_monitors(keyword)
 
-    st.write(f"พบ {len(rows)} รายการ")
+    st.write(f"พบ **{len(rows)}** รายการ")
 
     st.dataframe(
         pd.DataFrame(rows),
@@ -362,7 +510,7 @@ elif page == "Like Monitor":
 
     selected = st.selectbox("จอ", list(monitor_labels))
 
-    if st.button("กดชอบ", type="primary", use_container_width=True):
+    if st.button("👍 กดชอบ", type="primary", use_container_width=True):
 
         # บันทึกความสัมพันธ์ LIKES ลง Neo4j
         record_like(user_id, monitor_labels[selected])
@@ -390,7 +538,9 @@ elif page == "Graph Explorer":
         dot = [
             "digraph G {",
             'rankdir="LR";',
-            'node [shape=box, style="rounded,filled", fillcolor="#f8fafc"];',
+            'bgcolor="transparent";',
+            'node [shape=box, style="rounded,filled", fontcolor="#0f172a", color="none", fontname="Helvetica"];',
+            'edge [color="#64748b", fontcolor="#64748b", fontsize=10];',
         ]
 
         seen_nodes = set()
@@ -404,7 +554,9 @@ elif page == "Graph Explorer":
                 # เพิ่มโหนดแค่ครั้งเดียว ไม่ให้ซ้ำ
                 if nid not in seen_nodes:
                     safe_name = str(name).replace('"', "'")
-                    dot.append(f'"{nid}" [label="{safe_name}\\n:{label}"];')
+                    # User สีฟ้า, Monitor สีม่วง
+                    fill = "#67e8f9" if label == "User" else "#a5b4fc"
+                    dot.append(f'"{nid}" [label="{safe_name}\\n:{label}", fillcolor="{fill}"];')
                     seen_nodes.add(nid)
 
             # เพิ่มเส้นเชื่อมระหว่างโหนด
