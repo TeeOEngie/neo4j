@@ -335,7 +335,7 @@ require_connection()
 
 with st.sidebar:
 
-    st.markdown("## 🖥️ MonitorGraph")
+    st.markdown("## 🖥️ MonitorGraph Recommender")
     st.caption("Neo4j Aura + Streamlit")
 
     # ไอคอนหน้าเมนู (ชื่อหน้าข้างในยังเหมือนเดิม)
