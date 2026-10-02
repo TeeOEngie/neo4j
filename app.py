@@ -13,7 +13,6 @@ from neo4j_service import (
     ping,
     recommend_monitors,
     search_monitors,
-    seed_demo_data,
 )
 
 # ==================================================
@@ -214,15 +213,6 @@ st.markdown(
         margin-bottom: .7rem;
       }
 
-      /* ===== ปุ่มหลัก ===== */
-      .stButton > button[kind="primary"] {
-        background: linear-gradient(90deg, #06b6d4, #6366f1);
-        border: none;
-        color: white;
-        font-weight: 700;
-        border-radius: 12px;
-      }
-
       /* รูปใน sidebar มุมโค้ง */
       [data-testid="stSidebar"] img {
         border-radius: 14px;
@@ -270,11 +260,7 @@ def user_selector(key: str = "user") -> str:
     users = get_users()
 
     if not users:
-        st.info(
-            "ยังไม่มีข้อมูลผู้ใช้ "
-            "กรุณาไปหน้า Admin / Setup "
-            "แล้วสร้างข้อมูลตัวอย่าง"
-        )
+        st.info("ยังไม่มีข้อมูลผู้ใช้ใน Neo4j กรุณาเพิ่มข้อมูลจาก Colab ก่อน")
         st.stop()
 
     # สร้างรายการให้เลือก เช่น "U001 — Tony"
@@ -320,7 +306,6 @@ with st.sidebar:
             "Recommendations",
             "Monitor Search",
             "Graph Explorer",
-            "Admin / Setup",
         ],
     )
 
@@ -542,31 +527,3 @@ elif page == "Graph Explorer":
                 use_container_width=True,
                 hide_index=True,
             )
-
-
-# ==================================================
-# 5. Admin / Setup
-# ==================================================
-
-elif page == "Admin / Setup":
-
-    st.subheader("⚙️ Setup ข้อมูลตัวอย่าง")
-
-    st.warning("ปุ่มนี้ไม่ลบข้อมูลเดิม และใช้ MERGE จึงสามารถกดซ้ำได้")
-
-    st.markdown(
-        """
-        **Graph schema**
-
-        - `(:User)-[:FRIEND_OF]-(:User)`
-        - `(:User)-[:LIKES]->(:Monitor)`
-        """
-    )
-
-    if st.button("สร้าง Constraint + Demo Data", type="primary", use_container_width=True):
-
-        with st.spinner("กำลังสร้างข้อมูล..."):
-            seed_demo_data()
-
-        st.success("สร้างข้อมูลตัวอย่างเรียบร้อยแล้ว")
-        st.rerun()
