@@ -8,6 +8,7 @@ import streamlit as st
 from neo4j_service import (
     add_friendship,
     add_user,
+    delete_user,
     get_dashboard_metrics,
     get_profile,
     get_users,
@@ -229,6 +230,33 @@ st.markdown(
       [data-testid="stSidebar"] img {
         border-radius: 14px;
       }
+
+      /* ===== เมนู sidebar แบบไม่มีวงกลม ===== */
+      [data-testid="stSidebar"] [role="radiogroup"] > label > div:first-child {
+        display: none;                 /* ซ่อนวงกลมติ๊ก */
+      }
+
+      [data-testid="stSidebar"] [role="radiogroup"] > label {
+        width: 100%;
+        padding: .6rem .9rem;
+        margin-bottom: .3rem;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: background .2s;
+      }
+
+      [data-testid="stSidebar"] [role="radiogroup"] > label:hover {
+        background: rgba(8,145,178,.12);   /* เอาเมาส์ชี้แล้วมีสีจาง ๆ */
+      }
+
+      [data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked) {
+        background: linear-gradient(90deg, #06b6d4, #6366f1);   /* เมนูที่เลือกอยู่ */
+      }
+
+      [data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked) p {
+        color: white;
+        font-weight: 600;
+      }
     </style>
     """,
     unsafe_allow_html=True,
@@ -310,16 +338,21 @@ with st.sidebar:
     st.markdown("## 🖥️ MonitorGraph")
     st.caption("Neo4j Aura + Streamlit")
 
+    # ไอคอนหน้าเมนู (ชื่อหน้าข้างในยังเหมือนเดิม)
+    menu_icons = {
+        "Dashboard": "📊  Dashboard",
+        "Recommendations": "✨  Recommendations",
+        "Monitor Search": "🔎  Monitor Search",
+        "Graph Explorer": "🕸️  Graph Explorer",
+        "Manage Data": "🛠️  Manage Data",
+    }
+
     # เมนูหลักของระบบ
     page = st.radio(
         "เมนู",
-        [
-            "Dashboard",
-            "Recommendations",
-            "Monitor Search",
-            "Graph Explorer",
-            "Manage Data",
-        ],
+        list(menu_icons),
+        format_func=lambda p: menu_icons[p],   # แสดงชื่อพร้อมไอคอน
+        label_visibility="collapsed",          # ซ่อนคำว่า "เมนู"
     )
 
     st.divider()
@@ -330,7 +363,7 @@ with st.sidebar:
 
     # ถ้ามีไฟล์รูปให้แสดง ถ้าไม่มีให้แสดงข้อความเตือน
     if SIDEBAR_IMAGE.is_file():
-        st.image(str(SIDEBAR_IMAGE), caption="rub", width=120)
+        st.image(str(SIDEBAR_IMAGE), caption="", width=120)
     else:
         st.info("กรุณาวางไฟล์ library.png ไว้ในโฟลเดอร์เดียวกับ app.py")
 
@@ -543,14 +576,20 @@ elif page == "Graph Explorer":
 
 
 # ==================================================
-# 5. Manage Data (เพิ่มคน + เพิ่มความสัมพันธ์)
+# 5. Manage Data (เพิ่มคน + เพิ่มความสัมพันธ์ + ลบคน)
 # ==================================================
 
 elif page == "Manage Data":
 
     st.subheader("🛠️ จัดการข้อมูล")
 
-    tab_user, tab_friend = st.tabs(["👤 เพิ่มคน", "🤝 เพิ่มความสัมพันธ์เพื่อน"])
+    # แสดงข้อความที่ค้างไว้จากรอบก่อน (ใช้ตอนลบคนแล้วรีเฟรชหน้า)
+    if "flash" in st.session_state:
+        st.success(st.session_state.pop("flash"))
+
+    tab_user, tab_friend, tab_delete = st.tabs(
+        ["👤 เพิ่มคน", "🤝 เพิ่มความสัมพันธ์เพื่อน", "🗑️ ลบคน"]
+    )
 
     # ---------- แท็บเพิ่มคน ----------
     with tab_user:
@@ -607,3 +646,28 @@ elif page == "Manage Data":
                 """,
                 unsafe_allow_html=True,
             )
+
+    # ---------- แท็บลบคน ----------
+    with tab_delete:
+
+        del_id = user_selector("delete_user", "เลือกคนที่จะลบ")
+        target = get_profile(del_id)
+
+        if target:
+            st.warning(
+                f"จะลบ **{target['name']} ({target['user_id']})** "
+                f"พร้อมเพื่อน {len(target['friends'])} เส้น "
+                f"และจอที่ชอบ {len(target['liked'])} เส้น ลบแล้วกู้คืนไม่ได้"
+            )
+
+            # ต้องติ๊กยืนยันก่อน ปุ่มลบถึงจะกดได้
+            confirm = st.checkbox("ยืนยันว่าต้องการลบจริง", key="confirm_delete")
+
+            if st.button("🗑️ ลบคนนี้", type="primary", use_container_width=True, disabled=not confirm):
+
+                delete_user(del_id)
+
+                # เก็บข้อความไว้ แล้วรีเฟรชหน้าให้รายชื่ออัปเดต
+                st.session_state["flash"] = f"ลบ {target['name']} ({del_id}) เรียบร้อยแล้ว"
+                st.session_state.pop("confirm_delete", None)
+                st.rerun()
