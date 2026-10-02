@@ -18,8 +18,8 @@ def get_driver():
 
 
 def _database() -> str:
-    # ถ้าไม่ได้ใส่ database ใน secrets ให้ใช้ "neo4j"
-    return st.secrets["neo4j"].get("database", "neo4j")
+    # ใส่ชื่อ database ของ Aura ตรงนี้ (ค่าเดียวกับ DATABASE ใน Colab)
+    return "c2f5effc"
 
 
 def run(query: str, **params) -> list[dict]:
@@ -112,7 +112,7 @@ def get_profile(user_id: str) -> dict | None:
 
 
 # ==================================================
-# แนะนำจอจากเพื่อน (แบบเดียวกับ Step 19)
+# แนะนำจอจากเพื่อน
 # ==================================================
 
 def recommend_monitors(user_id: str, top_n: int = 6) -> list[dict]:
@@ -127,7 +127,7 @@ def recommend_monitors(user_id: str, top_n: int = 6) -> list[dict]:
 
         WITH m, collect(DISTINCT friend.name) AS friend_names
 
-        // นับว่าทั้งระบบมีคนชอบจอนี้กี่คน ใช้เป็นตัวตัดสินตอนคะแนนเท่ากัน
+        // นับว่าทั้งระบบมีคนชอบจอนี้กี่คน ใช้ตัดสินตอนคะแนนเท่ากัน
         OPTIONAL MATCH (:User)-[l:LIKES]->(m)
         WITH m, friend_names, count(l) AS popularity
 
@@ -165,22 +165,6 @@ def search_monitors(keyword: str = "") -> list[dict]:
         ORDER BY monitor_id
         """,
         keyword=keyword.strip(),
-    )
-
-
-# ==================================================
-# บันทึกการกดชอบ
-# ==================================================
-
-def record_like(user_id: str, monitor_id: str) -> None:
-    run(
-        """
-        MATCH (u:User {user_id: $user_id})
-        MATCH (m:Monitor {monitor_id: $monitor_id})
-        MERGE (u)-[:LIKES]->(m)   // กดซ้ำก็ไม่สร้างเส้นซ้ำ
-        """,
-        user_id=user_id,
-        monitor_id=monitor_id,
     )
 
 
@@ -226,120 +210,6 @@ def graph_neighborhood(user_id: str) -> list[dict]:
 
 
 # ==================================================
-# ข้อมูลตัวอย่าง (ชุดเดียวกับใน Colab)
-# ==================================================
-
-USERS = [
-    {"user_id": "U001", "name": "Tony"},
-    {"user_id": "U002", "name": "Jame"},
-    {"user_id": "U003", "name": "Jack"},
-    {"user_id": "U004", "name": "Ben"},
-    {"user_id": "U005", "name": "Smit"},
-    {"user_id": "U006", "name": "Joseph"},
-    {"user_id": "U007", "name": "Henry"},
-    {"user_id": "U008", "name": "Harry"},
-    {"user_id": "U009", "name": "Jonathan"},
-    {"user_id": "U010", "name": "Mark"},
-]
-
-MONITORS = [
-    {"monitor_id": "M001", "name": "ASUS ROG Swift PG279QM"},
-    {"monitor_id": "M002", "name": "Samsung Odyssey G9"},
-    {"monitor_id": "M003", "name": "LG UltraGear 27GP850"},
-    {"monitor_id": "M004", "name": "Acer Predator X34"},
-    {"monitor_id": "M005", "name": "MSI Optix MAG274QRF"},
-    {"monitor_id": "M006", "name": "AOC 24G2"},
-    {"monitor_id": "M007", "name": "ViewSonic VX2458"},
-    {"monitor_id": "M008", "name": "Gigabyte M27Q"},
-    {"monitor_id": "M009", "name": "Acer Nitro VG240Y"},
-    {"monitor_id": "M010", "name": "Dell S3422DWG"},
-    {"monitor_id": "M011", "name": "Dell UltraSharp U2723QE"},
-    {"monitor_id": "M012", "name": "BenQ PD2700U"},
-    {"monitor_id": "M013", "name": "LG UltraFine 27UP850"},
-    {"monitor_id": "M014", "name": "ASUS ProArt PA278CV"},
-    {"monitor_id": "M015", "name": "Eizo ColorEdge CS2731"},
-    {"monitor_id": "M016", "name": "Dell P2422H"},
-    {"monitor_id": "M017", "name": "HP E24 G4"},
-    {"monitor_id": "M018", "name": "Lenovo ThinkVision P27h-20"},
-    {"monitor_id": "M019", "name": "Samsung Smart Monitor M8"},
-    {"monitor_id": "M020", "name": "LG 34WN80C"},
-]
-
-FRIENDSHIPS = [
-    {"user1": "U001", "user2": "U005"},
-    {"user1": "U001", "user2": "U007"},
-    {"user1": "U002", "user2": "U003"},
-    {"user1": "U003", "user2": "U008"},
-    {"user1": "U004", "user2": "U006"},
-    {"user1": "U004", "user2": "U009"},
-    {"user1": "U006", "user2": "U009"},
-    {"user1": "U007", "user2": "U010"},
-    {"user1": "U002", "user2": "U007"},
-    {"user1": "U006", "user2": "U010"},
-]
-
-# (user_id, monitor_id) แต่ละคนชอบ 3 จอ
-LIKES = [
-    ("U001", "M011"), ("U001", "M012"), ("U001", "M014"),
-    ("U002", "M001"), ("U002", "M002"), ("U002", "M003"),
-    ("U003", "M003"), ("U003", "M009"), ("U003", "M005"),
-    ("U004", "M016"), ("U004", "M017"), ("U004", "M018"),
-    ("U005", "M012"), ("U005", "M015"), ("U005", "M013"),
-    ("U006", "M016"), ("U006", "M019"), ("U006", "M018"),
-    ("U007", "M001"), ("U007", "M011"), ("U007", "M020"),
-    ("U008", "M009"), ("U008", "M006"), ("U008", "M007"),
-    ("U009", "M016"), ("U009", "M017"), ("U009", "M018"),
-    ("U010", "M020"), ("U010", "M019"), ("U010", "M011"),
-]
-
-
-def seed_demo_data() -> None:
-    # Constraint ต้องรันทีละคำสั่ง
-    run("CREATE CONSTRAINT user_id_unique IF NOT EXISTS FOR (u:User) REQUIRE u.user_id IS UNIQUE")
-    run("CREATE CONSTRAINT monitor_id_unique IF NOT EXISTS FOR (m:Monitor) REQUIRE m.monitor_id IS UNIQUE")
-
-    # Users
-    run(
-        """
-        UNWIND $rows AS row
-        MERGE (u:User {user_id: row.user_id})
-        SET u.name = row.name
-        """,
-        rows=USERS,
-    )
-
-    # Monitors
-    run(
-        """
-        UNWIND $rows AS row
-        MERGE (m:Monitor {monitor_id: row.monitor_id})
-        SET m.name = row.name
-        """,
-        rows=MONITORS,
-    )
-
-    # FRIEND_OF
-    run(
-        """
-        UNWIND $rows AS row
-        MATCH (a:User {user_id: row.user1})
-        MATCH (b:User {user_id: row.user2})
-        MERGE (a)-[:FRIEND_OF]->(b)
-        """,
-        rows=FRIENDSHIPS,
-    )
-
-    # LIKES
-    run(
-        """
-        UNWIND $rows AS row
-        MATCH (u:User {user_id: row.user_id})
-        MATCH (m:Monitor {monitor_id: row.monitor_id})
-        MERGE (u)-[:LIKES]->(m)
-        """,
-        rows=[{"user_id": u, "monitor_id": m} for u, m in LIKES],
-    )
-    # ==================================================
 # หารหัส user ถัดไป เช่น มีถึง U010 จะได้ U011
 # ==================================================
 
@@ -389,3 +259,19 @@ def add_friendship(user1: str, user2: str) -> bool:
         user2=user2,
     )
     return bool(rows) and rows[0]["created"] > 0
+
+
+# ==================================================
+# ลบคน พร้อมเส้นความสัมพันธ์ทั้งหมดของคนนั้น
+# ==================================================
+
+def delete_user(user_id: str) -> bool:
+    rows = run(
+        """
+        MATCH (u:User {user_id: $user_id})
+        DETACH DELETE u          // ลบ node + FRIEND_OF + LIKES ที่ติดอยู่
+        RETURN count(*) AS deleted
+        """,
+        user_id=user_id,
+    )
+    return bool(rows) and rows[0]["deleted"] > 0
