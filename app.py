@@ -376,7 +376,7 @@ st.markdown(
     """
     <div class="hero">
       <div class="hero-badge">Neo4j Aura · Streamlit</div>
-      <h1>🖥️ MonitorGraph</h1>
+      <h1>🖥️ MonitorGraph Recommender</h1>
       <p>ระบบแนะนำจอคอมพิวเตอร์จากความชอบของเพื่อน ด้วย Graph Database</p>
     </div>
     """,
