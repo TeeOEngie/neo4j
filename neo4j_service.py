@@ -339,3 +339,53 @@ def seed_demo_data() -> None:
         """,
         rows=[{"user_id": u, "monitor_id": m} for u, m in LIKES],
     )
+    # ==================================================
+# หารหัส user ถัดไป เช่น มีถึง U010 จะได้ U011
+# ==================================================
+
+def next_user_id() -> str:
+    rows = run(
+        """
+        MATCH (u:User)
+        WHERE u.user_id STARTS WITH 'U'
+        RETURN max(toInteger(substring(u.user_id, 1))) AS n
+        """
+    )
+    n = rows[0]["n"] or 0
+    return f"U{n + 1:03d}"   # เติม 0 ข้างหน้าให้ครบ 3 หลัก
+
+
+# ==================================================
+# เพิ่มคนใหม่
+# ==================================================
+
+def add_user(name: str) -> str:
+    user_id = next_user_id()
+    run(
+        "CREATE (u:User {user_id: $user_id, name: $name})",
+        user_id=user_id,
+        name=name.strip(),
+    )
+    return user_id
+
+
+# ==================================================
+# เพิ่มความสัมพันธ์เพื่อน (คืนค่า False ถ้าเป็นเพื่อนกันอยู่แล้ว)
+# ==================================================
+
+def add_friendship(user1: str, user2: str) -> bool:
+    rows = run(
+        """
+        MATCH (a:User {user_id: $user1})
+        MATCH (b:User {user_id: $user2})
+
+        // สร้างเฉพาะถ้ายังไม่เป็นเพื่อนกัน (เช็กทั้งสองทิศ)
+        WHERE NOT EXISTS { MATCH (a)-[:FRIEND_OF]-(b) }
+
+        CREATE (a)-[:FRIEND_OF]->(b)
+        RETURN count(*) AS created
+        """,
+        user1=user1,
+        user2=user2,
+    )
+    return bool(rows) and rows[0]["created"] > 0

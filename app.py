@@ -6,6 +6,8 @@ import pandas as pd
 import streamlit as st
 
 from neo4j_service import (
+    add_friendship,
+    add_user,
     get_dashboard_metrics,
     get_profile,
     get_users,
@@ -213,6 +215,16 @@ st.markdown(
         margin-bottom: .7rem;
       }
 
+      /* ===== ปุ่มหลัก ===== */
+      .stButton > button[kind="primary"],
+      [data-testid="stFormSubmitButton"] > button {
+        background: linear-gradient(90deg, #06b6d4, #6366f1);
+        border: none;
+        color: white;
+        font-weight: 700;
+        border-radius: 12px;
+      }
+
       /* รูปใน sidebar มุมโค้ง */
       [data-testid="stSidebar"] img {
         border-radius: 14px;
@@ -256,11 +268,11 @@ def require_connection() -> None:
 # เลือกผู้ใช้
 # ==================================================
 
-def user_selector(key: str = "user") -> str:
+def user_selector(key: str = "user", label: str = "เลือกผู้ใช้") -> str:
     users = get_users()
 
     if not users:
-        st.info("ยังไม่มีข้อมูลผู้ใช้ใน Neo4j กรุณาเพิ่มข้อมูลจาก Colab ก่อน")
+        st.info("ยังไม่มีข้อมูลผู้ใช้ กรุณาไปหน้า Manage Data แล้วเพิ่มคนก่อน")
         st.stop()
 
     # สร้างรายการให้เลือก เช่น "U001 — Tony"
@@ -269,7 +281,7 @@ def user_selector(key: str = "user") -> str:
         for x in users
     }
 
-    chosen = st.selectbox("เลือกผู้ใช้", list(labels), key=key)
+    chosen = st.selectbox(label, list(labels), key=key)
 
     return labels[chosen]
 
@@ -306,6 +318,7 @@ with st.sidebar:
             "Recommendations",
             "Monitor Search",
             "Graph Explorer",
+            "Manage Data",
         ],
     )
 
@@ -526,4 +539,71 @@ elif page == "Graph Explorer":
                 pd.DataFrame(rows),
                 use_container_width=True,
                 hide_index=True,
+            )
+
+
+# ==================================================
+# 5. Manage Data (เพิ่มคน + เพิ่มความสัมพันธ์)
+# ==================================================
+
+elif page == "Manage Data":
+
+    st.subheader("🛠️ จัดการข้อมูล")
+
+    tab_user, tab_friend = st.tabs(["👤 เพิ่มคน", "🤝 เพิ่มความสัมพันธ์เพื่อน"])
+
+    # ---------- แท็บเพิ่มคน ----------
+    with tab_user:
+
+        # form = กดปุ่มแล้วค่อยส่งข้อมูล และล้างช่องกรอกให้อัตโนมัติ
+        with st.form("add_user_form", clear_on_submit=True):
+            name = st.text_input("ชื่อ", placeholder="เช่น Peter")
+            submitted = st.form_submit_button("➕ เพิ่มคน", use_container_width=True)
+
+        if submitted:
+            if not name.strip():
+                st.warning("กรุณากรอกชื่อ")
+            else:
+                new_id = add_user(name)
+                st.success(f"เพิ่ม {name.strip()} สำเร็จ รหัส {new_id}")
+
+        # แสดงรายชื่อทั้งหมดใต้ฟอร์ม
+        st.markdown("#### รายชื่อทั้งหมด")
+        st.dataframe(
+            pd.DataFrame(get_users()),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    # ---------- แท็บเพิ่มเพื่อน ----------
+    with tab_friend:
+
+        c1, c2 = st.columns(2)
+
+        with c1:
+            user1 = user_selector("friend_user1", "คนที่ 1")
+
+        with c2:
+            user2 = user_selector("friend_user2", "คนที่ 2")
+
+        if st.button("🤝 เป็นเพื่อนกัน", type="primary", use_container_width=True):
+
+            if user1 == user2:
+                st.warning("เลือกคนเดียวกันไม่ได้ กรุณาเลือกคนละคน")
+            elif add_friendship(user1, user2):
+                st.success(f"{user1} กับ {user2} เป็นเพื่อนกันแล้ว")
+            else:
+                st.info("สองคนนี้เป็นเพื่อนกันอยู่แล้ว")
+
+        # แสดงเพื่อนปัจจุบันของคนที่ 1
+        profile = get_profile(user1)
+
+        if profile:
+            chips = friend_chips(profile["friends"]) or '<span class="muted">ยังไม่มีเพื่อน</span>'
+            st.markdown(
+                f"""
+                <p style="margin:1rem 0 .4rem 0"><b>เพื่อนของ {profile['name']} ตอนนี้</b></p>
+                <div class="chips">{chips}</div>
+                """,
+                unsafe_allow_html=True,
             )
