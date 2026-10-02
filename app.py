@@ -12,7 +12,6 @@ from neo4j_service import (
     graph_neighborhood,
     ping,
     recommend_monitors,
-    record_like,
     search_monitors,
     seed_demo_data,
 )
@@ -320,7 +319,6 @@ with st.sidebar:
             "Dashboard",
             "Recommendations",
             "Monitor Search",
-            "Like Monitor",
             "Graph Explorer",
             "Admin / Setup",
         ],
@@ -334,7 +332,7 @@ with st.sidebar:
 
     # ถ้ามีไฟล์รูปให้แสดง ถ้าไม่มีให้แสดงข้อความเตือน
     if SIDEBAR_IMAGE.is_file():
-        st.image(str(SIDEBAR_IMAGE), caption="", width=120)
+        st.image(str(SIDEBAR_IMAGE), caption="rub", width=120)
     else:
         st.info("กรุณาวางไฟล์ library.png ไว้ในโฟลเดอร์เดียวกับ app.py")
 
@@ -488,38 +486,7 @@ elif page == "Monitor Search":
 
 
 # ==================================================
-# 4. Like Monitor
-# ==================================================
-
-elif page == "Like Monitor":
-
-    st.subheader("👍 บันทึกการกดชอบ")
-
-    user_id = user_selector("like_user")
-
-    monitors = search_monitors()
-
-    if not monitors:
-        st.info("ยังไม่มีข้อมูลจอ")
-        st.stop()
-
-    monitor_labels = {
-        f"{m['monitor_id']} — {m['name']}": m["monitor_id"]
-        for m in monitors
-    }
-
-    selected = st.selectbox("จอ", list(monitor_labels))
-
-    if st.button("👍 กดชอบ", type="primary", use_container_width=True):
-
-        # บันทึกความสัมพันธ์ LIKES ลง Neo4j
-        record_like(user_id, monitor_labels[selected])
-
-        st.success("บันทึกความสัมพันธ์ LIKES แล้ว")
-
-
-# ==================================================
-# 5. Graph Explorer
+# 4. Graph Explorer
 # ==================================================
 
 elif page == "Graph Explorer":
@@ -578,7 +545,7 @@ elif page == "Graph Explorer":
 
 
 # ==================================================
-# 6. Admin / Setup
+# 5. Admin / Setup
 # ==================================================
 
 elif page == "Admin / Setup":
